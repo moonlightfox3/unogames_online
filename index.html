@@ -1,0 +1,195 @@
+<!doctype html>
+<title>UNO Online Games (not an official website)</title>
+<style>
+    * {
+        outline: none;
+        user-select: none;
+    }
+    body, ::selection {
+        background-color: black;
+        color: lightgray;
+    }
+
+    button, input {
+        background-color: lightgray;
+        border-radius: 5px;
+    }
+    button:not([disabled]) {
+        cursor: pointer;
+    }
+    button[disabled], input[disabled] {
+        color: darkgray;
+    }
+</style>
+
+<input id="nameEl" placeholder="Display name" autofocus>
+| <button id="startBtn">Create lobby</button><button id="joinBtn">Join lobby</button><button id="addBtn" disabled>Invite to lobby</button><button id="leaveBtn" disabled>Leave lobby</button>
+| <span id="statusEl"></span>
+
+<script>
+    let id = null
+    let connections = {}
+    let channels = {}
+
+    startBtn.onclick = function () {
+        if (nameEl.value == "$TEMP") {
+            alert("Please choose a different display name.")
+            return
+        }
+        id = nameEl.value
+
+        nameEl.disabled = startBtn.disabled = joinBtn.disabled = true
+        addBtn.disabled = leaveBtn.disabled = false
+        statusEl.innerText = "Players (0): "
+    }
+    joinBtn.onclick = async function () {
+        if (nameEl.value == "$TEMP") {
+            alert("Please choose a different display name.")
+            return
+        }
+        id = nameEl.value
+
+        let msg = prompt("The lobby creator should send you some text.\nPlease paste it here.", "")
+        if (msg == null) return
+        msg = JSON.parse(atob(msg))
+
+        connections[msg.id] = new RTCPeerConnection({
+            iceServers: [{
+                urls: ["stun:stun.l.google.com:19302"],
+            }],
+        })
+
+        let answer = null
+        let iceCandidates = []
+        let iceFragment = null
+        connections[msg.id].onicecandidate = function (ev) {
+            if (ev.candidate == null) {
+                let msg = {candidates: iceCandidates, fragment: iceFragment, answer: answer.sdp, id}
+                msg = btoa(JSON.stringify(msg)).replaceAll("=", "")
+                if (prompt("Please copy this text and send it back.\nThe lobby creator should paste it into their webpage.", msg) == null) return
+            } else if (ev.candidate.candidate == "") return
+            else {
+                let obj = ev.candidate.toJSON()
+                if (iceFragment == null) iceFragment = obj.usernameFragment
+                iceCandidates.push(obj.candidate)
+            }
+        }
+
+        channels[msg.id] = connections[msg.id].createDataChannel("data", {negotiated: true, id: 0})
+        channels[msg.id].onmessage = ev => getMessage(ev.data)
+        channels[msg.id].onclose = () => leaveBtn.click()
+        
+        await connections[msg.id].setRemoteDescription({sdp: msg.offer, type: "offer"})
+        answer = await connections[msg.id].createAnswer()
+        await connections[msg.id].setLocalDescription(answer)
+
+        for (let iceCandidate of msg.candidates) await connections[msg.id].addIceCandidate({candidate: iceCandidate, usernameFragment: msg.fragment, sdpMid: "0", sdpMLineIndex: 0})
+        await connections[msg.id].addIceCandidate(null)
+        
+        nameEl.disabled = startBtn.disabled = joinBtn.disabled = addBtn.disabled = true
+        leaveBtn.disabled = false
+        statusEl.innerText = "Joined lobby"
+    }
+    addBtn.onclick = async function () {
+        let name = "$TEMP"
+        connections[name] = new RTCPeerConnection({
+            iceServers: [{
+                urls: ["stun:stun.l.google.com:19302"],
+            }],
+        })
+
+        let offer = null
+        let iceCandidates = []
+        let iceFragment = null
+        connections[name].onicecandidate = async function (ev) {
+            if (ev.candidate == null) {
+                let msg = {candidates: iceCandidates, fragment: iceFragment, offer: offer.sdp, id}
+                msg = btoa(JSON.stringify(msg)).replaceAll("=", "")
+                if (prompt("Please copy this text and send it to the person who is joining.\nThey should paste it into their webpage.", msg) == null) return
+
+                msg = prompt("They should send you back some text.\nPlease paste it here.", "")
+                if (msg == null) return
+                msg = JSON.parse(atob(msg))
+
+                if (Object.keys(connections).includes(msg.id)) {
+                    alert("A player has already joined with that display name.")
+                    name = "$TEMP"
+
+                    if (channels[name] != undefined) {
+                        channels[name].close()
+                        delete channels[name]
+                    }
+                    connections[name].close()
+                    delete connections[name]
+
+                    return
+                }
+                if (channels[name] != undefined) {
+                    channels[msg.id] = channels[name]
+                    delete channels[name]
+                }
+                connections[msg.id] = connections[name]
+                delete connections[name]
+                name = msg.id
+
+                await connections[name].setRemoteDescription({sdp: msg.answer, type: "answer"})
+                for (let iceCandidate of msg.candidates) await connections[name].addIceCandidate({candidate: iceCandidate, usernameFragment: msg.fragment, sdpMid: "0", sdpMLineIndex: 0})
+                await connections[name].addIceCandidate(null)
+
+                statusEl.innerText = `Players (${Object.keys(connections).length}): ${Object.keys(connections).join(", ")}`
+            } else if (ev.candidate.candidate == "") return
+            else {
+                let obj = ev.candidate.toJSON()
+                if (iceFragment == null) iceFragment = obj.usernameFragment
+                iceCandidates.push(obj.candidate)
+            }
+        }
+        
+        channels[name] = connections[name].createDataChannel("data", {negotiated: true, id: 0})
+        channels[name].onmessage = ev => getMessage(ev.data)
+        channels[name].onclose = function () {
+            if (channels[name] != null) delete channels[name]
+            if (connections[name] != null) {
+                connections[name].close()
+                delete connections[name]
+            }
+            
+            if (statusEl.innerText != "") statusEl.innerText = `Players (${Object.keys(connections).length}): ${Object.keys(connections).join(", ")}`
+        }
+        
+        offer = await connections[name].createOffer()
+        await connections[name].setLocalDescription(offer)
+    }
+    leaveBtn.onclick = function () {
+        for (let channel of Object.keys(channels)) {
+            channels[channel].close()
+            delete channels[channel]
+        }
+        for (let connection of Object.keys(connections)) {
+            connections[connection].close()
+            delete connections[connection]
+        }
+        
+        nameEl.disabled = startBtn.disabled = joinBtn.disabled = false
+        addBtn.disabled = leaveBtn.disabled = true
+        statusEl.innerText = ""
+    }
+
+    function getMessage (data) {
+        data = JSON.parse(data)
+
+        console.debug("Got message:", data) // TODO: Actual game(s), with RTC communication
+    }
+    function sendMessage (type, data = null, to = null, from = id) {
+        if (to == null) to = Object.keys(channels)
+        else if (typeof to != "object") to = [to]
+
+        let msg = JSON.stringify({type, data, from})
+        for (let channel of to) channels[channel].send(msg)
+    }
+
+    onbeforeunload = function () {
+        for (let channel of Object.keys(channels)) channels[channel].close()
+        for (let connection of Object.keys(connections)) connections[connection].close()
+    }
+</script>
