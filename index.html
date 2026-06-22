@@ -54,9 +54,16 @@
         msg = JSON.parse(atob(msg))
 
         connections[msg.id] = new RTCPeerConnection({
-            iceServers: [{
-                urls: ["stun:stun.l.google.com:19302"],
-            }],
+            iceServers: [
+                {
+                    urls: ["stun:stun.l.google.com:19302"],
+                },
+                {
+                    urls: ["turn:moonlightsturn.ddns.net:3478"],
+                    username: "piturn",
+                    credential: "uno3rtc",
+                },
+            ],
         })
 
         let answer = null
@@ -93,9 +100,16 @@
     addBtn.onclick = async function () {
         let name = "$TEMP"
         connections[name] = new RTCPeerConnection({
-            iceServers: [{
-                urls: ["stun:stun.l.google.com:19302"],
-            }],
+            iceServers: [
+                {
+                    urls: ["stun:stun.l.google.com:19302"],
+                },
+                {
+                    urls: ["turn:moonlightsturn.ddns.net:3478"],
+                    username: "piturn",
+                    credential: "uno3rtc",
+                },
+            ],
         })
 
         let offer = null
@@ -178,7 +192,7 @@
     function getMessage (data) {
         data = JSON.parse(data)
 
-        console.debug("Got message:", data) // TODO: Actual game(s), with RTC communication
+        console.debug("Got message:", data) // TODO: Actual game(s), with RTC communication. Also a ping RTC message, which calculates one-way and round-trip times?
     }
     function sendMessage (type, data = null, to = null, from = id) {
         if (to == null) to = Object.keys(channels)
