@@ -25,6 +25,7 @@
 <input id="nameEl" placeholder="Display name" autofocus>
 | <button id="startBtn">Create lobby</button><button id="joinBtn">Join lobby</button><button id="addBtn" disabled>Invite to lobby</button><button id="leaveBtn" disabled>Leave lobby</button>
 | <span id="statusEl"></span>
+| <button id="serverBtn">Check server status</button>: <span id="serverEl">Unknown</span>
 
 <script>
     let id = null
@@ -187,6 +188,37 @@
         nameEl.disabled = startBtn.disabled = joinBtn.disabled = false
         addBtn.disabled = leaveBtn.disabled = true
         statusEl.innerText = ""
+    }
+    serverBtn.onclick = async function () {
+        serverEl.innerText = "Checking..."
+
+        let connection = new RTCPeerConnection({
+            iceServers: [
+                {
+                    urls: ["stun:stun.l.google.com:19302"],
+                },
+                {
+                    urls: ["turn:moonlightsturn.ddns.net:3478"],
+                    username: "piturn",
+                    credential: "uno3rtc",
+                },
+            ],
+        })
+
+        let candidates = []
+        let errors = []
+        connection.onicecandidate = function (ev) {
+            if (ev.candidate == null) {
+                serverEl.innerText = (candidates.filter(val => val.type == "srflx").length > 0 && candidates.filter(val => val.type == "relay").length > 0) ? "Online" : "Offline (Or you don't have internet)"
+            } else if (ev.candidate.candidate == "") return
+            else candidates.push(ev.candidate)
+        }
+        connection.onicecandidateerror = function (ev) {
+            errors.push(ev)
+        }
+        
+        let offer = await connection.createOffer({offerToReceiveAudio: true})
+        await connection.setLocalDescription(offer)
     }
 
     function getMessage (data) {
