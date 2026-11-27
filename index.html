@@ -193,24 +193,30 @@
     serverBtn.onclick = async function () {
         serverEl.innerText = "Checking..."
 
-        let connection = new RTCPeerConnection({
-            iceServers: [
-                {
-                    urls: ["stun:stun.l.google.com:19302"],
-                },
-                {
-                    urls: ["turn:24.22.187.233:3478"],
-                    username: "piturn",
-                    credential: "uno3rtc",
-                },
-            ],
-        })
+        let connection = null
+        try {
+            connection = new RTCPeerConnection({
+                iceServers: [
+                    {
+                        urls: ["stun:stun.l.google.com:19302"],
+                    },
+                    {
+                        urls: ["turn:24.22.187.233:3478"],
+                        username: "piturn",
+                        credential: "uno3rtc",
+                    },
+                ],
+            })
+        } catch (er) {
+            serverEl.innerText = "Failed to start connection (You might not have internet)"
+            throw er
+        }
 
         let candidates = []
         let errors = []
         connection.onicecandidate = function (ev) {
             if (ev.candidate == null) {
-                serverEl.innerText = (candidates.filter(val => val.type == "srflx").length > 0 && candidates.filter(val => val.type == "relay").length > 0) ? "Online" : "Offline (Or you don't have internet)"
+                serverEl.innerText = (candidates.filter(val => val.type == "srflx").length > 0 && candidates.filter(val => val.type == "relay").length > 0) ? "Online" : "Offline (Or you might not have internet)"
             } else if (ev.candidate.candidate == "") return
             else candidates.push(ev.candidate)
         }
@@ -218,8 +224,13 @@
             errors.push(ev)
         }
         
-        let offer = await connection.createOffer({offerToReceiveAudio: true})
-        await connection.setLocalDescription(offer)
+        try {
+            let offer = await connection.createOffer({offerToReceiveAudio: true})
+            await connection.setLocalDescription(offer)
+        } catch (er) {
+            serverEl.innerText = "Failed to complete connection (Generic error)"
+            throw er
+        }
     }
 
     function getMessage (data) {
