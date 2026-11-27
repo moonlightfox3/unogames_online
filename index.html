@@ -23,12 +23,16 @@
     }
 </style>
 
-<input id="nameEl" placeholder="Display name" autofocus>
+<input id="nameEl" placeholder="Display name">
 | <button id="startBtn">Create lobby</button><button id="joinBtn">Join lobby</button><button id="addBtn" disabled>Invite to lobby</button><button id="leaveBtn" disabled>Leave lobby</button>
 | <span id="statusEl"></span>
 | <button id="serverBtn">Check server status</button>: <span id="serverEl">Unknown</span>
 
 <script>
+    onload = function () {
+        nameEl.value = ""
+    }
+
     let id = null
     let connections = {}
     let channels = {}
@@ -71,11 +75,16 @@
         let answer = null
         let iceCandidates = []
         let iceFragment = null
-        connections[msg.id].onicecandidate = function (ev) {
+        connections[msg.id].onicecandidate = async function (ev) {
             if (ev.candidate == null) {
                 let msg = {candidates: iceCandidates, fragment: iceFragment, answer: answer.sdp, id}
                 msg = btoa(JSON.stringify(msg)).replaceAll("=", "")
-                if (prompt("Please copy this text and send it back.\nThe lobby creator should paste it into their webpage.", msg) == null) return
+                try {
+                    await navigator.clipboard.writeText(msg)
+                    if (!confirm("Please send this automatically copied text back.\nThe lobby creator should paste it into their webpage.")) return
+                } catch (er) {
+                    if (prompt("Please copy this text and send it back.\nThe lobby creator should paste it into their webpage.", msg) == null) return
+                }
             } else if (ev.candidate.candidate == "") return
             else {
                 let obj = ev.candidate.toJSON()
@@ -121,7 +130,12 @@
             if (ev.candidate == null) {
                 let msg = {candidates: iceCandidates, fragment: iceFragment, offer: offer.sdp, id}
                 msg = btoa(JSON.stringify(msg)).replaceAll("=", "")
-                if (prompt("Please copy this text and send it to the person who is joining.\nThey should paste it into their webpage.", msg) == null) return
+                try {
+                    await navigator.clipboard.writeText(msg)
+                    if (!confirm("Please send this automatically copied text to the person who is joining.\nThey should paste it into their webpage.")) return
+                } catch (er) {
+                    if (prompt("Please copy this text and send it to the person who is joining.\nThey should paste it into their webpage.", msg) == null) return
+                }
 
                 msg = prompt("They should send you back some text.\nPlease paste it here.", "")
                 if (msg == null) return
