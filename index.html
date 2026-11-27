@@ -225,7 +225,8 @@
         }
         
         try {
-            let offer = await connection.createOffer({offerToReceiveAudio: true})
+            connection.createDataChannel("data", {negotiated: true, id: 0})
+            let offer = await connection.createOffer()
             await connection.setLocalDescription(offer)
         } catch (er) {
             serverEl.innerText = "Failed to complete connection (Generic error)"
